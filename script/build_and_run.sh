@@ -31,11 +31,14 @@ cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 cp "$ROOT_DIR/Resources/Info.plist" "$INFO_PLIST"
 
-if [[ ! -f "$RESOURCES/AppIcon.icns" ]]; then
+ICON_SOURCE="$ROOT_DIR/Resources/AppIconSource.jpg"
+ICON_ICNS="$ROOT_DIR/build/AppIcon.icns"
+if [[ ! -f "$ICON_ICNS" || "$ICON_SOURCE" -nt "$ICON_ICNS" ]]; then
   swiftc -O -o "$ROOT_DIR/build/generate_icon" "$ROOT_DIR/script/generate_icon.swift"
-  ICON_OUT="$ROOT_DIR/build/AppIcon.iconset" "$ROOT_DIR/build/generate_icon"
-  iconutil -c icns "$ROOT_DIR/build/AppIcon.iconset" -o "$RESOURCES/AppIcon.icns"
+  ICON_OUT="$ROOT_DIR/build/AppIcon.iconset" ICON_SOURCE="$ICON_SOURCE" "$ROOT_DIR/build/generate_icon"
+  iconutil -c icns "$ROOT_DIR/build/AppIcon.iconset" -o "$ICON_ICNS"
 fi
+cp "$ICON_ICNS" "$RESOURCES/AppIcon.icns"
 
 codesign --force --deep -s - "$APP_BUNDLE"
 

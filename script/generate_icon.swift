@@ -2,6 +2,8 @@ import AppKit
 import Foundation
 
 let outDir = ProcessInfo.processInfo.environment["ICON_OUT"] ?? "build/AppIcon.iconset"
+let sourcePath = ProcessInfo.processInfo.environment["ICON_SOURCE"]
+    ?? "Resources/AppIconSource.jpg"
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 
 func drawIcon(size: CGFloat) -> NSImage {
@@ -9,34 +11,26 @@ func drawIcon(size: CGFloat) -> NSImage {
     image.lockFocus()
     defer { image.unlockFocus() }
 
+    guard let source = NSImage(contentsOfFile: sourcePath) else {
+        return image
+    }
+
     let rect = NSRect(x: 0, y: 0, width: size, height: size)
     let corner = size * 0.22
-    let background = NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner)
-    let colors = [
-        NSColor(srgbRed: 0.08, green: 0.15, blue: 0.34, alpha: 1),
-        NSColor(srgbRed: 0.16, green: 0.32, blue: 0.92, alpha: 1)
-    ]
-    NSGradient(colors: colors)?.draw(in: background, angle: -60)
+    let clip = NSBezierPath(roundedRect: rect, xRadius: corner, yRadius: corner)
+    clip.addClip()
 
-    let text = "dsh"
-    let font = NSFont(name: "AvenirNext-Heavy", size: size * 0.27)
-        ?? NSFont.systemFont(ofSize: size * 0.27, weight: .heavy)
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: font,
-        .foregroundColor: NSColor.white
-    ]
-    let string = NSAttributedString(string: text, attributes: attrs)
-    let textSize = string.size()
-    let origin = NSPoint(
-        x: (size - textSize.width) / 2,
-        y: (size - textSize.height) / 2 - size * 0.04
+    // Aspect-fill the source image so it covers the canvas without distortion.
+    let sourceSize = source.size
+    let scale = max(size / sourceSize.width, size / sourceSize.height)
+    let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+    let drawRect = NSRect(
+        x: (size - drawSize.width) / 2,
+        y: (size - drawSize.height) / 2,
+        width: drawSize.width,
+        height: drawSize.height
     )
-    string.draw(at: origin)
-
-    // Status dot: a small green accent under the wordmark.
-    let dotRect = NSRect(x: size * 0.47, y: size * 0.185, width: size * 0.06, height: size * 0.06)
-    NSColor(srgbRed: 0.35, green: 0.95, blue: 0.55, alpha: 1).setFill()
-    NSBezierPath(ovalIn: dotRect).fill()
+    source.draw(in: drawRect)
 
     return image
 }
