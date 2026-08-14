@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-let outDir = CommandLine.arguments.dropFirst().first ?? "build/AppIcon.iconset"
+let outDir = ProcessInfo.processInfo.environment["ICON_OUT"] ?? "build/AppIcon.iconset"
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 
 func drawIcon(size: CGFloat) -> NSImage {

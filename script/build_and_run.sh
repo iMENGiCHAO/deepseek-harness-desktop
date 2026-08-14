@@ -19,8 +19,11 @@ RESOURCES="$APP_CONTENTS/Resources"
 pkill -x "$EXEC_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
-swift build -c release
-BUILD_BINARY="$(swift build -c release --show-bin-path)/$EXEC_NAME"
+swiftc -O -target x86_64-apple-macosx13.0 \
+  -framework AppKit -framework WebKit \
+  -o "$ROOT_DIR/build/$EXEC_NAME" \
+  "$ROOT_DIR"/Sources/DeepSeekHarnessDesktop/*.swift
+BUILD_BINARY="$ROOT_DIR/build/$EXEC_NAME"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$RESOURCES"
@@ -29,7 +32,8 @@ chmod +x "$APP_BINARY"
 cp "$ROOT_DIR/Resources/Info.plist" "$INFO_PLIST"
 
 if [[ ! -f "$RESOURCES/AppIcon.icns" ]]; then
-  swift "$ROOT_DIR/script/generate_icon.swift" "$ROOT_DIR/build/AppIcon.iconset"
+  swiftc -O -o "$ROOT_DIR/build/generate_icon" "$ROOT_DIR/script/generate_icon.swift"
+  ICON_OUT="$ROOT_DIR/build/AppIcon.iconset" "$ROOT_DIR/build/generate_icon"
   iconutil -c icns "$ROOT_DIR/build/AppIcon.iconset" -o "$RESOURCES/AppIcon.icns"
 fi
 
