@@ -15,10 +15,16 @@ final class ServerController {
 
     let serverURL = URL(string: "http://127.0.0.1:3080")!
 
-    private let dshPath = "/Users/zhouchao/.npm-global/bin/dsh"
-    private let logPath = "/Users/zhouchao/.dsh/dsh-desktop.log"
+    private var logPath: String {
+        NSHomeDirectory() + "/.dsh/dsh-desktop.log"
+    }
     private var spawnedProcess: Process?
     private var pollGeneration = 0
+
+    private struct LaunchCommand {
+        let executable: URL
+        let arguments: [String]
+    }
 
     func start() {
         if spawnedProcess?.isRunning == true {
@@ -53,19 +59,25 @@ final class ServerController {
     private func launchServer() {
         set(.starting)
 
-        guard FileManager.default.isExecutableFile(atPath: dshPath) else {
-            set(.failed("找不到 dsh 命令：\(dshPath)\n请先执行 npm i -g @deepseek-ai/dsh"))
+        guard let command = resolveLaunchCommand() else {
+            set(.failed("未找到 dsh 命令。\n请先安装 Node.js 并执行：npm i -g @deepseek-ai/dsh"))
             return
         }
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: dshPath)
-        proc.arguments = ["web", "--port", "3080"]
+        proc.executableURL = command.executable
+        proc.arguments = command.arguments
 
         var env = ProcessInfo.processInfo.environment
         env["HOME"] = NSHomeDirectory()
         env["DSH_HOME"] = NSHomeDirectory() + "/.dsh"
-        env["PATH"] = "/Users/zhouchao/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+        env["PATH"] = [
+            NSHomeDirectory() + "/.npm-global/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin"
+        ].joined(separator: ":")
         proc.environment = env
 
         let logDir = (logPath as NSString).deletingLastPathComponent
@@ -97,6 +109,50 @@ final class ServerController {
         } catch {
             set(.failed("启动 dsh 失败：\(error.localizedDescription)"))
         }
+    }
+
+    // MARK: - dsh discovery
+
+    /// Locates a usable `dsh` command: on PATH, in common install locations,
+    /// or via `npx` (which downloads @deepseek-ai/dsh on first run).
+    private func resolveLaunchCommand() -> LaunchCommand? {
+        if let dsh = executableInPATH("dsh") {
+            return LaunchCommand(executable: dsh, arguments: ["web", "--port", "3080"])
+        }
+
+        let home = NSHomeDirectory()
+        for path in [
+            home + "/.npm-global/bin/dsh",
+            "/usr/local/bin/dsh",
+            "/opt/homebrew/bin/dsh",
+            "/usr/bin/dsh"
+        ] where FileManager.default.isExecutableFile(atPath: path) {
+            return LaunchCommand(executable: URL(fileURLWithPath: path), arguments: ["web", "--port", "3080"])
+        }
+
+        if let npx = executableInPATH("npx") {
+            return LaunchCommand(
+                executable: npx,
+                arguments: ["--yes", "@deepseek-ai/dsh", "web", "--port", "3080"]
+            )
+        }
+        return nil
+    }
+
+    private func executableInPATH(_ name: String) -> URL? {
+        var paths = (ProcessInfo.processInfo.environment["PATH"] ?? "")
+            .split(separator: ":").map(String.init)
+        paths.insert(NSHomeDirectory() + "/.npm-global/bin", at: 0)
+        paths.insert("/opt/homebrew/bin", at: 0)
+        paths.insert("/usr/local/bin", at: 0)
+
+        for dir in paths where !dir.isEmpty {
+            let candidate = dir + "/" + name
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return URL(fileURLWithPath: candidate)
+            }
+        }
+        return nil
     }
 
     // MARK: - Reachability polling
